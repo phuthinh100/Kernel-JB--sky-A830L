@@ -95,6 +95,56 @@ static struct msm_panel_common_pdata *mipi_rohm_pdata;
 static struct dsi_buf rohm_tx_buf;
 static struct dsi_buf rohm_rx_buf;
 
+#ifdef CONFIG_GAMMA_CONTROL
+struct dsi_cmd_desc new_color_vals[12];
+#endif
+
+#ifdef CONFIG_GAMMA_CONTROL
+#define RED 1
+#define GREEN 2
+#define BLUE 3
+#define CONTRAST 5
+#define BRIGHTNESS 6
+#define SATURATION 7
+
+void update_vals(int type, int array_pos, int val)
+{
+	int i;
+
+	switch(type) {
+	case RED:
+		new_color_vals[5].payload[array_pos] = val;
+		new_color_vals[6].payload[array_pos] = val;
+		break;
+	case GREEN:
+		new_color_vals[7].payload[array_pos] = val;
+		new_color_vals[8].payload[array_pos] = val;
+		break;
+	case BLUE:
+		new_color_vals[9].payload[array_pos] = val;
+		new_color_vals[10].payload[array_pos] = val;
+		break;
+	case CONTRAST:
+		for (i = 5; i <= 10; i++)
+			new_color_vals[i].payload[type] = val;
+		break;
+	case BRIGHTNESS:
+		for (i = 5; i <= 10; i++)
+			new_color_vals[i].payload[type] = val;
+		break;
+	case SATURATION:
+		for (i = 5; i <= 10; i++)
+			new_color_vals[i].payload[type] = val;
+		break;
+	default:
+		pr_info("%s - Wrong value - abort.\n", __FUNCTION__);
+		return;
+	}
+
+	pr_info("%s - Updating display GAMMA settings.\n", __FUNCTION__);
+}
+#endif
+
 struct lcd_state_type {
     boolean disp_powered_up;
     boolean disp_initialized;
@@ -160,18 +210,12 @@ char dc[9]          = {0xb8, 0x73,0x0a,0x91,0x1e,0x00,0x08,0xb5,0xb5};
 char vdcs[9]        = {0xb9, 0x00,0x01,0x37,0x00,0x00,0x00,0x00,0x00};
 char gcev[13]       = {0xc0, 0x68,0xff,0x68,0xff,0x80,0xff,0x5b,0xff,0x5b,0xff,
                              0x71,0xff};
-char gcpr[17]       = {0xc1, 0x71,0x7b,0x8b,0xa6,0xcd,0xc9,0x83,0xb0,0x64,0x82,
-                             0x55,0x8e,0xa0,0xb4,0xc8,0xdc};
-char gcpg[17]       = {0xc2, 0x71,0x7b,0x8b,0xa6,0xcd,0xc9,0x83,0xb0,0x64,0x82,
-                             0x55,0x8e,0xa0,0xb4,0xc8,0xdc};
-char gcpb[17]       = {0xc3, 0x85,0x8d,0x9b,0xb1,0xd4,0xce,0x8a,0xb5,0x68,0x85,
-                             0x57,0x94,0xaa,0xbe,0xd2,0xe6};
-char gcnr[17]       = {0xc4, 0x63,0x6d,0x7d,0x97,0xbd,0xb9,0x61,0x8d,0x3f,0x5d,
-                             0x42,0x7a,0x96,0xaa,0xbe,0xd2};
-char gcng[17]       = {0xc5, 0x63,0x6d,0x7d,0x97,0xbd,0xb9,0x61,0x8d,0x3f,0x5d,
-                             0x42,0x7a,0x96,0xaa,0xbe,0xd2};
-char gcnb[17]       = {0xc6, 0x77,0x7e,0x8c,0xa2,0xc4,0xbd,0x68,0x92,0x44,0x60,
-                             0x44,0x80,0x96,0xaa,0xbe,0xd2};
+char gcpr[17]       = {0xc1, 0x71,0x7b,0x8b,0xa6,0xcd,0xc9,0x83,0xb0,0x64,0x82, 0x55,0x8e,0xa0,0xb4,0xc8,0xdc};
+char gcpg[17]       = {0xc2, 0x71,0x7b,0x8b,0xa6,0xcd,0xc9,0x83,0xb0,0x64,0x82, 0x55,0x8e,0xa0,0xb4,0xc8,0xdc};
+char gcpb[17]       = {0xc3, 0x85,0x8d,0x9b,0xb1,0xd4,0xce,0x8a,0xb5,0x68,0x85, 0x57,0x94,0xaa,0xbe,0xd2,0xe6};
+char gcnr[17]       = {0xc4, 0x63,0x6d,0x7d,0x97,0xbd,0xb9,0x61,0x8d,0x3f,0x5d, 0x42,0x7a,0x96,0xaa,0xbe,0xd2};
+char gcng[17]       = {0xc5, 0x63,0x6d,0x7d,0x97,0xbd,0xb9,0x61,0x8d,0x3f,0x5d, 0x42,0x7a,0x96,0xaa,0xbe,0xd2};
+char gcnb[17]       = {0xc6, 0x77,0x7e,0x8c,0xa2,0xc4,0xbd,0x68,0x92,0x44,0x60, 0x44,0x80,0x96,0xaa,0xbe,0xd2};
 //char pits[17]       = {0xc8, 0x11,0x18,0x0d,0x0d,0x28,0x12,0x00,0x00,0x00,0x00,
 //                             0x00,0x00,0x00,0x00,0x00,0x00};
 //char pits[17]       = {0xc8, 0x10,0x16,0x10,0x10,0x22,0x00,0x00,0x00,0x00,0x00,
@@ -214,6 +258,7 @@ static struct dsi_cmd_desc rohm_display_init_cmds[] = {
     {DTYPE_DCS_WRITE, 1, 0, 0, 120, sizeof(sleep_out), sleep_out},
     {DTYPE_DCS_LWRITE, 1, 0, 0, 0, sizeof(extcctl), extcctl},
 #ifdef  FEATURE_ROHM_DUMMY_SCAN_OFF   
+    bbb
     {DTYPE_DCS_LWRITE, 1, 0, 0, 0, sizeof(scanmode_off), scanmode_off},
 #endif    
     {DTYPE_DCS_LWRITE, 1, 0, 0, 0, sizeof(mtp_1), mtp_1},
@@ -227,12 +272,14 @@ static struct dsi_cmd_desc rohm_display_init_cmds[] = {
     {DTYPE_DCS_LWRITE, 1, 0, 0, 0, sizeof(gcev_6), gcev_6}, 
     {DTYPE_DCS_LWRITE, 1, 0, 0, 0, sizeof(gcev_7), gcev_7} 
 #else
+    dd
     {DTYPE_DCS_WRITE, 1, 0, 0, 120, sizeof(sleep_out), sleep_out},
     {DTYPE_DCS_LWRITE, 1, 0, 0, 0, sizeof(extcctl), extcctl},
     {DTYPE_DCS_LWRITE, 1, 0, 0, 0, sizeof(mtp_1), mtp_1},
     {DTYPE_DCS_LWRITE, 1, 0, 0, 0, sizeof(mtp_2), mtp_2} 
 #endif
 #elif defined (FEATURE_WS_SAMPLE)
+    ee
     {DTYPE_DCS_LWRITE, 1, 0, 0, 0, sizeof(extcctl), extcctl},
     {DTYPE_DCS_LWRITE, 1, 0, 0, 0, sizeof(eics), eics},
     {DTYPE_DCS_LWRITE, 1, 0, 0, 0, sizeof(mtp_1), mtp_1},
@@ -243,6 +290,7 @@ static struct dsi_cmd_desc rohm_display_init_cmds[] = {
     {DTYPE_DCS_LWRITE, 1, 0, 0, 0, sizeof(mtp_6), mtp_6}, 
     {DTYPE_DCS_LWRITE, 1, 0, 0, 0, sizeof(pw_lock), pw_lock}   
 #else
+    ff
     {DTYPE_DCS_LWRITE, 1, 0, 0, 0, sizeof(extcctl), extcctl},
     {DTYPE_DCS_LWRITE, 1, 0, 0, 0, sizeof(eics), eics},
     {DTYPE_DCS_LWRITE, 1, 0, 0, 0, sizeof(cas), cas},
@@ -516,8 +564,14 @@ if(!is_read)
 }	
 #endif
 		
+#ifdef CONFIG_GAMMA_CONTROL
+		mipi_dsi_cmds_tx(&rohm_tx_buf,
+		new_color_vals,
+		ARRAY_SIZE(rohm_display_init_cmds));
+#else
 		mipi_dsi_cmds_tx(&rohm_tx_buf, rohm_display_init_cmds,
 				ARRAY_SIZE(rohm_display_init_cmds));
+#endif
 		rohm_state.disp_initialized = true;
 	}
 
@@ -888,53 +942,101 @@ int bl_level;
     printk(KERN_ERR"mipi_rohm_set_backlight bl_level =%d \n",bl_level);
 	
 switch(bl_level){
-case 16:
+case 32:
 	wdb[1] = 255;
 	break;
-case 15:
-	wdb[1] = 242;
+case 31:
+	wdb[1] = 248;
 	break;
-case 14:
-	wdb[1] = 230;
+case 30:
+	wdb[1] = 240;
 	break;
-case 13:
+case 29:
+	wdb[1] = 232;
+	break;
+case 28:
+	wdb[1] = 224;
+	break;
+case 27:
 	wdb[1] = 216;
 	break;
-case 12:
-	wdb[1] = 204;
+case 26:
+	wdb[1] = 208;
 	break;
-case 11:
-	wdb[1] = 191;
+case 25:
+	wdb[1] = 200;
 	break;
-case 10:
-	wdb[1] = 178;
+case 24:
+	wdb[1] = 192;
 	break;
-case 9:
-	wdb[1] = 165;
+case 23:
+	wdb[1] = 184;
 	break;
-case 8:
+case 22:
+	wdb[1] = 176;
+	break;
+case 21:
+	wdb[1] = 168;
+	break;
+case 20:
+	wdb[1] = 160;
+	break;
+case 19:
 	wdb[1] = 152;
 	break;
-case 7:
-	wdb[1] = 140;
+case 18:
+	wdb[1] = 144;
 	break;
-case 6:
-	wdb[1] = 125;
+case 17:
+	wdb[1] = 136;
 	break;
-case 5:
-	wdb[1] = 113;
+case 16:
+	wdb[1] = 128;
 	break;
-case 4:
-	wdb[1] = 100;
+case 15:
+	wdb[1] = 120;
 	break;
-case 3:
+case 14:
+	wdb[1] = 112;
+	break;
+case 13:
+	wdb[1] = 104;
+	break;
+case 12:
+	wdb[1] = 96;
+	break;
+case 11:
 	wdb[1] = 88;
 	break;
+case 10:
+	wdb[1] = 80;
+	break;
+case 9:
+	wdb[1] = 72;
+	break;
+case 8:
+	wdb[1] = 64;
+	break;
+case 7:
+	wdb[1] = 56;
+	break;
+case 6:
+	wdb[1] = 48;
+	break;
+case 5:
+	wdb[1] = 40;
+	break;
+case 4:
+	wdb[1] = 32;
+	break;
+case 3:
+	wdb[1] = 24;
+	break;
 case 2:
-	wdb[1] = 76;
+	wdb[1] = 16;
 	break;
 case 1:
-	wdb[1] = 63;
+	wdb[1] = 8;
 	break;
 case 0:
 	wdb[1] = 0;
@@ -994,6 +1096,10 @@ static int __devinit mipi_rohm_lcd_probe(struct platform_device *pdev)
         mipi_rohm_pdata = pdev->dev.platform_data;
 		return 0;
 	}
+#ifdef CONFIG_GAMMA_CONTROL
+    memcpy((void *) new_color_vals, (void *) rohm_display_init_cmds, sizeof(new_color_vals));
+#endif
+
        mutex_init(&rohm_state.lcd_mutex);
 	msm_fb_add_device(pdev);
 

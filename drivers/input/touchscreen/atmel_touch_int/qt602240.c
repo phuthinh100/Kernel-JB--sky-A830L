@@ -32,6 +32,10 @@
 #include <linux/mfd/pm8xxx/pm8xxx-adc.h>
 #endif
 
+#ifdef CONFIG_TOUCH_WAKE
+#include <linux/touch_wake.h>
+#endif
+
 /* -------------------------------------------------------------------- */
 /* debug option */
 /* -------------------------------------------------------------------- */
@@ -70,6 +74,12 @@ uint8_t	QT_Boot(bool withReset);
 /* -------------------------------------------------------------------- */
 /* function proto type & variable for driver							*/
 /* -------------------------------------------------------------------- */
+
+#ifdef CONFIG_TOUCH_WAKE
+static struct qt602240_data_t * touchwake_data;
+static unsigned suspending = 0;
+#endif
+
 static int __devinit qt602240_probe(struct i2c_client *client, const struct i2c_device_id *id);
 static int __devexit qt602240_remove(struct i2c_client *client);
 #if defined(CONFIG_PM) && defined(CONFIG_HAS_EARLYSUSPEND)
@@ -3767,6 +3777,14 @@ void  get_message(struct work_struct * p)
 		goto interrupt_return;
 	}
 
+#ifdef CONFIG_TOUCH_WAKE
+	if (unlikely(!suspending && device_is_suspended()) &&
+			touchwake_is_enabled()) {
+		touch_press();
+		goto interrupt_return;
+	}
+#endif
+
 	/* touch_message_flag - set when tehre is a touch message
 	   facesup_message_flag - set when there is a face suppression message */
 	// check chip's calibration status when touch down or up
@@ -4384,6 +4402,11 @@ static int qt602240_remove(struct i2c_client *client)
 #if defined(CONFIG_PM) && defined(CONFIG_HAS_EARLYSUSPEND)
 static int qt602240_early_suspend(struct early_suspend *h)
 {
+#ifdef CONFIG_TOUCH_WAKE
+	if (touchwake_is_enabled())
+		return 0;	/* touchwake will handle touchscreen suspend call */
+#endif
+
 	dbg_func_in();
 	disable_irq(qt602240_data->client->irq);
 
@@ -4426,6 +4449,12 @@ static int qt602240_early_suspend(struct early_suspend *h)
 static int  qt602240_late_resume(struct early_suspend *h)
 {
 	dbg_func_in();
+
+#ifdef CONFIG_TOUCH_WAKE
+	if (touchwake_is_enabled())
+		return 0;	/* touchwake will handle touchscreen suspend call */
+#endif
+
 	touch_data_init();
 	qt_Power_Config_Init();
 	// touch ic calibration.
@@ -4449,6 +4478,75 @@ static int  qt602240_late_resume(struct early_suspend *h)
 }
 #endif // CONFIG_PM && CONFIG_HAS_EARLYSUSPEND
 
+#ifdef CONFIG_TOUCH_WAKE
+void touchscreen_disable(void)
+{
+	suspending = 1;
+	dbg_func_in();
+	disable_irq(qt602240_data->client->irq);
+
+#ifdef PROTECTION_MODE
+	cancel_work_sync(&qt602240_data->work_protection_mode_disable);
+	cancel_work_sync(&qt602240_data->work_tchautocal_disable);
+	del_timer(&protection_mode_timer);
+	del_timer(&tchautocal_timer);
+	protection_mode = false;
+#ifdef ANTI_TOUCH_RECOVERY_AFTER_PROTECTION_MODE
+	f_delta_check=false;
+	f_delta_error_check=false;
+	delta_timer_cnt=0;
+	store_delta_value_before_cnt = 0 ;
+	cancel_work_sync(&qt602240_data->delta_check);
+	del_timer(&delta_check_timer);
+#endif //ANTI_TOUCH_RECOVERY_AFTER_PROTECTION_MODE
+#ifdef GHOST_TOUCH_RECOVERY_AFTER_PROTECTION_MODE
+
+	cancel_work_sync(&qt602240_data->work_two_touch_protection_disable);
+	del_timer(&two_touch_timer);
+	two_touch_move = -1;
+	two_touch_x = 0;
+	two_touch_y = 0;
+	two_touch_jiffies_elapse=0xFFFFFFFF;
+	two_touch_jiffies_start=0xFFFFFFFF;
+
+	bTwoTouchProtection_pressed = false;
+	bTwoTouchProtection_executed = false;
+
+#endif //ANTI_TOUCH_RECOVERY_AFTER_PROTECTION_MODE
+#endif
+
+	qt_Power_Sleep();
+	clear_event(TSC_CLEAR_ALL);
+	dbg_func_out();
+	suspending = 0;
+}
+EXPORT_SYMBOL(touchscreen_disable);
+
+void touchscreen_enable(void)
+{
+	dbg_func_in();
+	touch_data_init();
+	qt_Power_Config_Init();
+	// touch ic calibration.
+	calibrate_chip();
+	acquisition_config.tchautocal= T8_TCHAUTOCAL_PROTECTION; // 10
+	acquisition_config.atchcalst = T8_ATCHCALST_PROTECTION;
+	acquisition_config.atchcalsthr = T8_ATCHCALSTHR_PROTECTION; // Never suspend
+	acquisition_config.atchfrccalthr = T8_ATCHFRCCALTHR_PROTECTION;
+	acquisition_config.atchfrccalratio = T8_ATCHFRCCALRATIO_PROTECTION;
+	if (write_acquisition_config(acquisition_config) != CFG_WRITE_OK) {
+		printk("\n[TSP][ERROR] line : %d\n", __LINE__);
+	}
+	cal_correction_limit = 5;
+	debugInfo.calibration_cnt=0;
+	debugInfo.autocal_flag=1;
+	f_resume=true;
+	f_resume_cal=true;
+	enable_irq(qt602240_data->client->irq);
+	dbg_func_out();
+}
+EXPORT_SYMBOL(touchscreen_enable);
+#endif
 
 /* I2C driver probe function */
 static int __devinit qt602240_probe(struct i2c_client *client, const struct i2c_device_id *id)
@@ -4682,6 +4780,10 @@ static int __devinit qt602240_probe(struct i2c_client *client, const struct i2c_
 	qt602240_data->es.suspend = (void*)qt602240_early_suspend;
 	qt602240_data->es.resume = (void*)qt602240_late_resume;
 	register_early_suspend(&qt602240_data->es);
+#endif
+
+#ifdef CONFIG_TOUCH_WAKE
+	touchwake_data = qt602240_data;
 #endif
 
 #ifdef SKY_PROCESS_CMD_KEY

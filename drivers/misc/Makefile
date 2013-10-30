@@ -72,3 +72,7 @@ obj-$(CONFIG_MSM_MEMORY_LOW_POWER_MODE_SUSPEND_DEEP_POWER_DOWN) \
 obj-$(CONFIG_PMIC8058_XOADC) += pmic8058-xoadc.o
 obj-$(CONFIG_QSEECOM) += qseecom.o
 obj-$(CONFIG_QFP_FUSE) += qfp_fuse.o
+obj-$(CONFIG_BLX)    += blx.o
+#obj-$(CONFIG_SOUND_CONTROL) += sound_control.o
+obj-$(CONFIG_GAMMA_CONTROL) += gamma_control.o
+obj-$(CONFIG_TOUCH_WAKE) += touch_wake.o

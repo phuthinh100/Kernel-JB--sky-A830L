@@ -31,6 +31,20 @@ enum msm_core_control_event {
 };
 
 /**
+ * msm_dcvs_register_cpu_freq
+ * @freq: the frequency value to register
+ * @voltage: the operating voltage (in mV) associated with the above frequency
+ *
+ * Register a cpu frequency and its operating voltage with dcvs.
+ */
+#ifdef CONFIG_MSM_DCVS
+void msm_dcvs_register_cpu_freq(uint32_t freq, uint32_t voltage);
+#else
+static inline void msm_dcvs_register_cpu_freq(uint32_t freq, uint32_t voltage)
+{}
+#endif
+
+/**
  * struct msm_dcvs_idle
  *
  * API for idle code to register and send idle enter/exit

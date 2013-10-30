@@ -247,9 +247,18 @@ static void msm_fb_set_bl_brightness(struct led_classdev *led_cdev,
 
 	/* This maps android backlight level 0 to 255 into
 	   driver backlight level 0 to bl_max with rounding */
-	bl_lvl = (2 * value * mfd->panel_info.bl_max + MAX_BACKLIGHT_BRIGHTNESS)
-		/(2 * MAX_BACKLIGHT_BRIGHTNESS);
+	/*bl_lvl = (2 * value * mfd->panel_info.bl_max + MAX_BACKLIGHT_BRIGHTNESS)
+		/(2 * MAX_BACKLIGHT_BRIGHTNESS);*/
+    if (value > 19) {
+        bl_lvl = ((value - 19) * mfd->panel_info.bl_max)/MAX_BACKLIGHT_BRIGHTNESS;
+    }
+    else {
+        bl_lvl = 1;
+    }
 
+    if (bl_lvl < 1) {
+		bl_lvl = 1;
+    }
 	if (!bl_lvl && value)
 		bl_lvl = 1;
 	down(&mfd->sem);
@@ -259,7 +268,7 @@ static void msm_fb_set_bl_brightness(struct led_classdev *led_cdev,
 
 static struct led_classdev backlight_led = {
 	.name		= "lcd-backlight",
-	.brightness	= MAX_BACKLIGHT_BRIGHTNESS,
+	.brightness	= 1,//MAX_BACKLIGHT_BRIGHTNESS,
 	.brightness_set	= msm_fb_set_bl_brightness,
 };
 #endif

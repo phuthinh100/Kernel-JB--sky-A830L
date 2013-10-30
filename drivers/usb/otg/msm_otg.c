@@ -47,6 +47,11 @@
 #include <mach/msm_bus.h>
 #include <mach/rpm-regulator.h>
 
+#ifdef CONFIG_FORCE_FAST_CHARGE
+#include <linux/fastchg.h>
+#define USB_FASTCHG_LOAD 1000 /* uA */
+#endif
+
 #define MSM_USB_BASE	(motg->regs)
 #define DRIVER_NAME	"msm_otg"
 
@@ -1089,6 +1094,8 @@ static int msm_otg_notify_power_supply(struct msm_otg *motg, unsigned mA)
 		return 0;
 	}
 	/* Set max current limit */
+	dev_info(motg->phy.dev, "current: %d -> %d (mA)\n",
+			motg->cur_power, mA);
 	if (power_supply_set_current_limit(psy, 1000*mA))
 		goto psy_not_supported;
 
@@ -1122,6 +1129,15 @@ static void msm_otg_notify_charger(struct msm_otg *motg, unsigned mA)
 
 	if (motg->cur_power == mA)
 		return;
+
+#ifdef CONFIG_FORCE_FAST_CHARGE
+        if (force_fast_charge == 1) {
+                        mA = USB_FASTCHG_LOAD;
+                        pr_info("USB fast charging is ON - 1000mA.\n");
+        } else {
+                pr_info("USB fast charging is OFF.\n");
+        }
+#endif
 
 	dev_info(motg->phy.dev, "Avail curr from USB = %u\n", mA);
 

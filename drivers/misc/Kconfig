@@ -4,6 +4,13 @@
 
 menu "Misc devices"
 
+config SOUND_CONTROL
+	tristate "Mako Sound Control"
+	default y
+	help
+		This adds support for tweaking the Sound Card driver
+		parameters. Currently only Headphones volume boost.
+   
 config SENSORS_LIS3LV02D
 	tristate
 	depends on INPUT
@@ -659,7 +666,26 @@ config PN544
 	default y
 	help
 	  NXP PN544 Near Field Communication controller support.
-	  
+
+config BLX
+	bool "Support for Battery Life eXtender"
+	default y
+	help
+		Say Y here to enable Battery Life eXtender
+
+config GAMMA_CONTROL
+	tristate "Mako Gamma Control"
+	default y
+	help
+		This adds full support for Gamma screen tweaking on
+		Mako.
+
+config TOUCH_WAKE
+	bool "Touch Wake support"
+	default y
+	help
+		Say Y here to enable Touch Wake
+
 source "drivers/misc/c2port/Kconfig"
 source "drivers/misc/eeprom/Kconfig"
 source "drivers/misc/cb710/Kconfig"

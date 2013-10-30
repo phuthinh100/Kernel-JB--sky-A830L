@@ -97,7 +97,7 @@ static int __init mipi_video_rohm_wxga_init(void)
 	pinfo.lcdc.border_clr = 0;	/* blk */
 	pinfo.lcdc.underflow_clr = 0xff;	/* blue */
 	pinfo.lcdc.hsync_skew = 0;
-	pinfo.bl_max = 16;
+	pinfo.bl_max = 32; //thinh mod
 	pinfo.bl_min = 1;
 	pinfo.fb_num = 2;
 #if defined (MIPI_CLOCK_440MBPS)     
