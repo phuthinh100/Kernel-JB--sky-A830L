@@ -365,6 +365,7 @@ struct pm8921_bms_platform_data {
 	int				ignore_shutdown_soc;
 	int				adjust_soc_low_threshold;
 	int				chg_term_ua;
+	int        		eoc_check_soc;
 };
 
 #if defined(CONFIG_PM8921_BMS) || defined(CONFIG_PM8921_BMS_MODULE)
@@ -448,6 +449,7 @@ int pm8921_bms_get_rbatt(void);
  *					and so it should not use the shutdown
  *					soc stored in a coincell backed register
  */
+void pm8921_bms_invalidate_shutdown_soc(void);
 #if defined(CONFIG_PANTECH_PMIC_MAX17058)
 int pm8921_bms_get_percent(bool max17058_uses);
 int pm8921_qcom_bms_get_percent(void);

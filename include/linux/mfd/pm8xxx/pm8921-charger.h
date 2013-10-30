@@ -239,6 +239,7 @@ struct pm8921_charger_platform_data {
 	unsigned int			usb_max_current;
 	unsigned int			cool_bat_chg_current;
 	unsigned int			warm_bat_chg_current;
+	int       				ext_batt_temp_monitor;
 	unsigned int			cool_bat_voltage;
 	unsigned int			warm_bat_voltage;
 	unsigned int			(*get_batt_capacity_percent) (void);
@@ -258,6 +259,7 @@ struct pm8921_charger_platform_data {
 	enum pm8921_chg_hot_thr		hot_thr;
 	int				rconn_mohm;
 	enum pm8921_chg_led_src_config	led_src_config;
+	int        		eoc_check_soc;
 };
 
 enum pm8921_charger_source {
@@ -391,6 +393,10 @@ int pm8921_usb_ovp_set_hystersis(enum pm8921_usb_debounce_time ms);
  *
  */
 int pm8921_usb_ovp_disable(int disable);
+
+int pm8921_get_batt_state(void);
+int pm8921_force_start_charging(void);
+
 #if defined(CONFIG_PANTECH_PMIC_MAX17058)
 int get_max17058_soc(void);
 #endif
@@ -401,6 +407,7 @@ int get_max17058_soc(void);
  * batfet this will return 0.
  */
 int pm8921_is_batfet_closed(void);
+int pm8921_set_ext_battery_health(int health);
 #else
 #ifdef CONFIG_PANTECH_CHARGER
 static inline void pm8921_charger_vbus_draw(unsigned int mA, unsigned int chg_type)
