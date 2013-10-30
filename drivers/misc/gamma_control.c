@@ -24,30 +24,30 @@ extern void update_vals(int type, int array_pos, int val);
 /*
  * Whites for RED, GREEN and BLUE
  */
-unsigned int red_whites_val = 32;
-unsigned int green_whites_val = 32;
-unsigned int blue_whites_val = 32;
+unsigned int red_whites_val = 0x2D;
+unsigned int green_whites_val = 0x2D;
+unsigned int blue_whites_val = 0x45;
 
 /*
  * Grays for RED, GREEN and BLUE
  */
-unsigned int red_greys_val = 64;
-unsigned int green_greys_val = 64;
-unsigned int blue_greys_val = 64;
+unsigned int red_greys_val = 0x39;
+unsigned int green_greys_val = 0x39;
+unsigned int blue_greys_val = 0x4E;
 
 /*
  * Mids for RED, GREEN and BLUE
  */
-unsigned int red_mids_val = 68;
-unsigned int green_mids_val = 68;
-unsigned int blue_mids_val = 68;
+unsigned int red_mids_val = 0x4E;
+unsigned int green_mids_val = 0x4E;
+unsigned int blue_mids_val = 0x5F;
 
 /*
  * Blacks for RED, GREEN and BLUE
  */
-unsigned int red_blacks_val = 118;
-unsigned int green_blacks_val = 118;
-unsigned int blue_blacks_val = 118;
+unsigned int red_blacks_val = 0x6F;
+unsigned int green_blacks_val = 0x6F;
+unsigned int blue_blacks_val = 0x7B;
 
 /*
  * These values are common to the RGB spectrum in this implementation

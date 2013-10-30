@@ -109,33 +109,33 @@ struct dsi_cmd_desc new_color_vals[12];
 
 void update_vals(int type, int array_pos, int val)
 {
-	int i;
+	//int i;
 
 	switch(type) {
 	case RED:
-		new_color_vals[5].payload[array_pos] = val;
+		//new_color_vals[5].payload[array_pos] = val;
 		new_color_vals[6].payload[array_pos] = val;
 		break;
 	case GREEN:
 		new_color_vals[7].payload[array_pos] = val;
-		new_color_vals[8].payload[array_pos] = val;
+		//new_color_vals[8].payload[array_pos] = val;
 		break;
 	case BLUE:
-		new_color_vals[9].payload[array_pos] = val;
-		new_color_vals[10].payload[array_pos] = val;
+		new_color_vals[8].payload[array_pos] = val;
+		//new_color_vals[10].payload[array_pos] = val;
 		break;
-	case CONTRAST:
-		for (i = 5; i <= 10; i++)
+	/*case CONTRAST:
+		for (i = 6; i <= 11; i++)
 			new_color_vals[i].payload[type] = val;
 		break;
 	case BRIGHTNESS:
-		for (i = 5; i <= 10; i++)
+		for (i = 6; i <= 11; i++)
 			new_color_vals[i].payload[type] = val;
 		break;
 	case SATURATION:
-		for (i = 5; i <= 10; i++)
+		for (i = 6; i <= 11; i++)
 			new_color_vals[i].payload[type] = val;
-		break;
+		break;*/
 	default:
 		pr_info("%s - Wrong value - abort.\n", __FUNCTION__);
 		return;
