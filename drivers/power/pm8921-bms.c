@@ -1597,7 +1597,7 @@ static int calculate_state_of_charge(struct pm8921_bms_chip *chip,
 	soc = adjust_soc(chip, soc, batt_temp, rbatt,
 					fcc_uah, unusable_charge_uah, cc_uah);
 
-	if (last_soc == -EINVAL || soc <= last_soc) {
+	if (1/*last_soc == -EINVAL || soc <= last_soc*/) {
 		last_soc = soc;
 	} else {
 		/*

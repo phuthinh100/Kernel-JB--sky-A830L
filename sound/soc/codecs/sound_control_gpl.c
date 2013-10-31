@@ -19,11 +19,14 @@
 #include <linux/kobject.h>
 #include <linux/sysfs.h>
 #include <linux/kallsyms.h>
+#include <linux/mfd/wcd9xxx/wcd9310_registers.h>
 
 #include <sound/control.h>
 #include <sound/soc.h>
 
 extern struct snd_kcontrol_new *gpl_faux_snd_controls_ptr;
+
+extern struct snd_soc_codec *fauxsound_codec_ptr;
 
 #define SOUND_CONTROL_MAJOR_VERSION	2
 #define SOUND_CONTROL_MINOR_VERSION	1
@@ -36,6 +39,10 @@ extern struct snd_kcontrol_new *gpl_faux_snd_controls_ptr;
 
 #define HEADPHONE_PA_L_OFFSET	6
 #define HEADPHONE_PA_R_OFFSET	7
+
+unsigned int tabla_read(struct snd_soc_codec *codec, unsigned int reg);
+int tabla_write(struct snd_soc_codec *codec, unsigned int reg,
+		unsigned int value);
 
 static ssize_t cam_mic_gain_show(struct kobject *kobj, struct kobj_attribute *attr, char *buf)
 {
@@ -152,6 +159,7 @@ static ssize_t headphone_gain_store(struct kobject *kobj, struct kobj_attribute 
 	int l_max, r_max;
 	int l_delta, r_delta;
 	struct soc_mixer_control *l_mixer_ptr, *r_mixer_ptr;
+	unsigned int lval, rval;
 
 	l_mixer_ptr =
 		(struct soc_mixer_control *)gpl_faux_snd_controls_ptr[HEADPHONE_L_OFFSET].
@@ -161,6 +169,8 @@ static ssize_t headphone_gain_store(struct kobject *kobj, struct kobj_attribute 
 			private_value;
 
 	sscanf(buf, "%d %d", &l_max, &r_max);
+	lval = (l_max > 40)? l_max - 40: 0;
+	rval = (r_max > 40)? r_max - 40: 0;
 
 	l_delta = l_max - l_mixer_ptr->platform_max;
 	l_mixer_ptr->platform_max = l_max;
@@ -172,6 +182,11 @@ static ssize_t headphone_gain_store(struct kobject *kobj, struct kobj_attribute 
 	r_mixer_ptr->max = r_max;
 	r_mixer_ptr->min += r_delta;
  
+	tabla_write(fauxsound_codec_ptr,
+		TABLA_A_CDC_RX1_VOL_CTL_B2_CTL, lval);
+	tabla_write(fauxsound_codec_ptr,
+		TABLA_A_CDC_RX2_VOL_CTL_B2_CTL, rval);
+
 	return count;
 }
 
@@ -198,6 +213,9 @@ static ssize_t headphone_pa_gain_store(struct kobject *kobj, struct kobj_attribu
 	int l_max, r_max;
 	int l_delta, r_delta;
 	struct soc_mixer_control *l_mixer_ptr, *r_mixer_ptr;
+	unsigned int lval, rval;
+	unsigned int gain, status;
+	unsigned int out;
 
 	l_mixer_ptr =
 		(struct soc_mixer_control *)
@@ -209,6 +227,8 @@ static ssize_t headphone_pa_gain_store(struct kobject *kobj, struct kobj_attribu
 			private_value;
 
 	sscanf(buf, "%d %d", &l_max, &r_max);
+	lval = (l_max < 18)? 18 - l_max: 15;
+	rval = (r_max < 18)? 18 - r_max: 15;
 
 	l_delta = l_max - l_mixer_ptr->platform_max;
 	l_mixer_ptr->platform_max = l_max;
@@ -219,6 +239,22 @@ static ssize_t headphone_pa_gain_store(struct kobject *kobj, struct kobj_attribu
 	r_mixer_ptr->platform_max = r_max;
 	r_mixer_ptr->max = r_max;
 	r_mixer_ptr->min += r_delta;
+
+	gain = tabla_read(fauxsound_codec_ptr, TABLA_A_RX_HPH_L_GAIN);
+	out = (gain & 0xf0) | lval;
+	tabla_write(fauxsound_codec_ptr, TABLA_A_RX_HPH_L_GAIN, out);
+
+	status = tabla_read(fauxsound_codec_ptr, TABLA_A_RX_HPH_L_STATUS);
+	out = (status & 0x0f) | (lval << 4);
+	tabla_write(fauxsound_codec_ptr, TABLA_A_RX_HPH_L_STATUS, out);
+
+	gain = tabla_read(fauxsound_codec_ptr, TABLA_A_RX_HPH_R_GAIN);
+	out = (gain & 0xf0) | rval;
+	tabla_write(fauxsound_codec_ptr, TABLA_A_RX_HPH_R_GAIN, out);
+
+	status = tabla_read(fauxsound_codec_ptr, TABLA_A_RX_HPH_R_STATUS);
+	out = (status & 0x0f) | (rval << 4);
+	tabla_write(fauxsound_codec_ptr, TABLA_A_RX_HPH_R_STATUS, out);
 
 	return count;
 }
