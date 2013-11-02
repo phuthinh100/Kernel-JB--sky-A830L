@@ -2,7 +2,7 @@
 /* GPIO, VREG & resolution */
 /* -------------------------------------------------------------------- */
 
-#define MAX_NUM_FINGER	5
+#define MAX_NUM_FINGER	10
 
 // Screen resolution
 #define SCREEN_RESOLUTION_X	720 
@@ -55,7 +55,7 @@
 /* [GEN_ACQUISITIONCONFIG_T8 INSTANCE 0] */
 #define T8_CHRGTIME             35
 #define T8_ATCHDRIFT            0
-#define T8_TCHDRIFT             5
+#define T8_TCHDRIFT             10
 #define T8_DRIFTST              	1
 #define T8_TCHAUTOCAL            	0
 #define T8_SYNC                  	0
@@ -80,7 +80,7 @@ static uint8_t T9_TCHTHR[2] = {45,40};
 #define T9_TCHDI                      	2
 #define T9_ORIENT               1   //5
 #define T9_MRGTIMEOUT           				0 
-#define T9_MOVHYSTI    									5
+#define T9_MOVHYSTI    									10
 #define T9_MOVHYSTN                     2
 #define T9_MOVFILTER										0 
 #define T9_NUMTOUCH                     MAX_NUM_FINGER
@@ -229,7 +229,7 @@ static uint8_t T9_TCHHYST[2] = {11,10};
 #define T48_GCLIMITMAX          	64 
 #define T48_GCCOUNTMINTGT       	10 
 #define T48_MFINVLDDIFFTHR      	32
-#define T48_MFINCADCSPXTHR      	5  
+#define T48_MFINCADCSPXTHR      	10
 #define T48_MFERRORTHR          	38 
 #define T48_SELFREQMAX          	8
 #define T48_RESERVED9           	0  
@@ -244,7 +244,7 @@ static uint8_t T9_TCHHYST[2] = {11,10};
 #define T48_MOVHYSTI            	10  
 #define T48_MOVHYSTN            	2  
 #define T48_MOVFILTER           	0 
-#define T48_NUMTOUCH            	5  
+#define T48_NUMTOUCH            	10
 #define T48_MRGHYST             	20 
 #define T48_MRGTHR              	25
 #define T48_XLOCLIP             	2   //0
