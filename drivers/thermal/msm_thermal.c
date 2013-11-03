@@ -27,8 +27,8 @@
 
 #define POLLING_DELAY 100
 
-unsigned int temp_threshold = 65;
-module_param(temp_threshold, int, 0755);
+static int temp_threshold;
+//module_param(temp_threshold, int, 0755);
 
 static int enabled;
 static struct msm_thermal_data msm_thermal_info;
@@ -50,7 +50,7 @@ static int msm_thermal_get_freq_table(void)
 
 	table = cpufreq_frequency_get_table(0);
 	if (table == NULL) {
-		pr_debug("%s: error reading cpufreq table\n", __func__);
+		pr_info("%s: error reading cpufreq table\n", __func__);
 		ret = -EINVAL;
 		goto fail;
 	}
@@ -100,12 +100,13 @@ static void check_temp(struct work_struct *work)
 	tsens_dev.sensor_num = msm_thermal_info.sensor_id;
 	ret = tsens_get_temp(&tsens_dev, &temp);
 	if (ret) {
-		pr_debug("msm_thermal: Unable to read TSENS sensor %d\n",
+		pr_info("msm_thermal: Unable to read TSENS sensor %d\n",
 				tsens_dev.sensor_num);
 		goto reschedule;
 	}
 
 	if (!limit_init) {
+        pr_info("line : %d | func : %s\n", __LINE__, __func__);
 		ret = msm_thermal_get_freq_table();
 		if (ret)
 			goto reschedule;
@@ -113,8 +114,11 @@ static void check_temp(struct work_struct *work)
 			limit_init = 1;
 	}
 
-	if (temp >= temp_threshold) {
+    pr_info("line : %d | func : %s temp = %lu | temp_threshold = %u\n", __LINE__, __func__, temp, temp_threshold);
+	if (temp >= temp_threshold - 30) {
+        pr_info("line : %d | func : %s\n", __LINE__, __func__);
 		if (!throttling) {
+            pr_info("line : %d | func : %s\n", __LINE__, __func__);
 			max_frequency = policy->max;
 			throttling = true;
 		}
@@ -122,16 +126,20 @@ static void check_temp(struct work_struct *work)
 		if (limit_idx == limit_idx_low)
 			goto reschedule;
 
+        pr_info("line : %d | func : %s\n", __LINE__, __func__);
 		limit_idx = limit_idx_low;
 		if (limit_idx < limit_idx_low)
 			limit_idx = limit_idx_low;
 		max_freq = table[limit_idx].frequency;
-	} else if (temp < (temp_threshold - 5)) {
+        pr_info("line : %d | func : %s max_freq = %u\n", __LINE__, __func__, max_freq);
+	} else if (temp < (temp_threshold - 35)) {
+        pr_info("line : %d | func : %s\n", __LINE__, __func__);
 		if (limit_idx == limit_idx_high)
 			goto reschedule;
 
 		limit_idx = limit_idx_high;
 		max_freq = max_frequency;
+        pr_info("line : %d | func : %s max_freq = %u\n", __LINE__, __func__, max_freq);
 	}
 	if (max_freq == limited_max_freq)
 		goto reschedule;
@@ -140,23 +148,26 @@ static void check_temp(struct work_struct *work)
 	for_each_possible_cpu(cpu) {
 		ret = update_cpu_max_freq(cpu, max_freq);
 		if (ret)
-			pr_debug("Unable to limit cpu%d max freq to %d\n",
+			pr_info("Unable to limit cpu%d max freq to %d\n",
 					cpu, max_freq);
 	}
 
 reschedule:
-	if (enabled)
+    pr_info("line : %d | func : %s\n", __LINE__, __func__);
+	if (enabled) {
+        pr_info("line : %d | func : %s\n", __LINE__, __func__);
 		schedule_delayed_work(&check_temp_work, msecs_to_jiffies(POLLING_DELAY));
+    }
 }
 
 static void disable_msm_thermal(void)
 {
 	int cpu = 0;
 
-	/* make sure check_temp is no longer running */
 	cancel_delayed_work(&check_temp_work);
 	flush_scheduled_work();
 
+    limit_idx = limit_idx_high;
 	if (limited_max_freq == MSM_CPUFREQ_NO_LIMIT)
 		return;
 
@@ -172,8 +183,11 @@ static int set_enabled(const char *val, const struct kernel_param *kp)
 	ret = param_set_bool(val, kp);
 	if (!enabled)
 		disable_msm_thermal();
-	else
+	else {
 		pr_info("msm_thermal: no action for enabled = %d\n", enabled);
+        INIT_DELAYED_WORK(&check_temp_work, check_temp);
+        schedule_delayed_work(&check_temp_work, 0);
+    }
 
 	pr_info("msm_thermal: enabled = %d\n", enabled);
 
@@ -188,6 +202,18 @@ static struct kernel_param_ops module_ops = {
 module_param_cb(enabled, &module_ops, &enabled, 0644);
 MODULE_PARM_DESC(enabled, "enforce thermal limit on cpu");
 
+static int set_temp_threshold(const char *val, const struct kernel_param *kp)
+{
+	return param_set_int(val, kp);
+}
+
+static struct kernel_param_ops threshold_ops = {
+	.set = set_temp_threshold,
+	.get = param_get_int,
+};
+
+module_param_cb(temp_threshold, &threshold_ops, &temp_threshold, 0755);
+
 int __devinit msm_thermal_init(struct msm_thermal_data *pdata)
 {
 	int ret = 0;
@@ -197,6 +223,7 @@ int __devinit msm_thermal_init(struct msm_thermal_data *pdata)
 	memcpy(&msm_thermal_info, pdata, sizeof(struct msm_thermal_data));
 
 	enabled = 1;
+    temp_threshold = 70;
 	INIT_DELAYED_WORK(&check_temp_work, check_temp);
 	schedule_delayed_work(&check_temp_work, 0);
 
