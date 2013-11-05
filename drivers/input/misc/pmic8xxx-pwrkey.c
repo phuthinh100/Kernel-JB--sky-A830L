@@ -23,6 +23,10 @@
 #include <linux/mfd/pm8xxx/core.h>
 #include <linux/input/pmic8xxx-pwrkey.h>
 
+#ifdef CONFIG_TOUCHSCREEN_SWEEP2WAKE
+#include <linux/input/sweep2wake.h>
+#endif
+
 #ifdef CONFIG_TOUCH_WAKE
 #include <linux/touch_wake.h>
 #endif
@@ -209,6 +213,11 @@ static int __devinit pmic8xxx_pwrkey_probe(struct platform_device *pdev)
 				 key_press_irq, err);
 		goto unreg_input_dev;
 	}
+
+#ifdef CONFIG_TOUCHSCREEN_SWEEP2WAKE
+	sweep2wake_setdev(pwr);
+	printk(KERN_INFO "[sweep2wake]: set device %s\n", pwr->name);
+#endif
 
 	err = request_any_context_irq(key_release_irq, pwrkey_release_irq,
 		 IRQF_TRIGGER_RISING, "pmic8xxx_pwrkey_release", pwrkey);

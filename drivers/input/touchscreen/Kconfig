@@ -961,4 +961,8 @@ config TOUCHSCREEN_MELFAS_TS
        	tristate "Melfas Touch Driver"
 	depends on I2C
 
+config TOUCHSCREEN_SWEEP2WAKE
+  tristate "Sweep2Wake for touchscreens"
+  default n
+
 endif

@@ -32,6 +32,10 @@
 #include <linux/mfd/pm8xxx/pm8xxx-adc.h>
 #endif
 
+#ifdef CONFIG_TOUCHSCREEN_SWEEP2WAKE
+#include <linux/input/sweep2wake.h>
+#endif
+
 #ifdef CONFIG_TOUCH_WAKE
 #include <linux/touch_wake.h>
 #endif
@@ -260,7 +264,6 @@ bool bTwoTouchProtection_executed = false;
 #endif
 #endif
 
-
 static bool active_event = true;
 static bool is_cal_success = false;
 static bool touch_diagnostic_ret = true;
@@ -330,6 +333,25 @@ unsigned long pre_charger_mode;
 
 static int diagnostic_min =0;
 static int diagnostic_max =0;
+
+#ifdef CONFIG_TOUCHSCREEN_SWEEP2WAKE
+/* gives back true if only one touch is recognized */
+bool is_single_touch(void)
+{
+        int i = 0, cnt = 0;
+
+        for( i= 0; i<MAX_NUM_FINGER; i++ ) {
+                if ((!fingerInfo[i].status) ||
+                    (fingerInfo[i].status == TOUCH_EVENT_RELEASE))
+                        continue;
+                else cnt++;
+        }
+        if (cnt == 1)
+                return true;
+        else
+                return false;
+}
+#endif
 
 /*------------------------------ functions prototype -----------------------------------*/
 uint8_t init_touch_driver(void);
@@ -3870,6 +3892,7 @@ void report_input (int touch_status) {
 				}
 			}
 #endif // HAS_TOUCH_KEY
+
 			valid_input_count++;
 		}
 		else
@@ -3910,6 +3933,15 @@ void report_input (int touch_status) {
 				}
 #endif //	HAS_TOUCH_KEY
 
+#ifdef CONFIG_TOUCHSCREEN_SWEEP2WAKE
+                if (s2w_switch > 0) {
+                        exec_count = true;
+                        barrier[0] = false;
+                        barrier[1] = false;
+                        scr_on_touch = false;
+                }
+#endif
+
 			}
 			// TOUCH_EVENT_MOVE
 			else if(fingerInfo[i].status == TOUCH_EVENT_MOVE && fingerInfo[i].mode == TSC_EVENT_WINDOW)
@@ -3943,7 +3975,13 @@ void report_input (int touch_status) {
 #endif // HAS_TOUCH_KEY
 			}
 		}
+
+#ifdef CONFIG_TOUCHSCREEN_SWEEP2WAKE
+        detect_sweep2wake(fingerInfo[i].x, fingerInfo[i].y);
+#endif
+
 	}
+
 
 	input_report_key(qt602240_data->input_dev, BTN_TOUCH, !!valid_input_count);  // mirinae_ICS
 	dbg("[mt slot TOUCH] touch event num => %d\n",valid_input_count);
@@ -4407,42 +4445,55 @@ static int qt602240_early_suspend(struct early_suspend *h)
 		return 0;	/* touchwake will handle touchscreen suspend call */
 #endif
 
-	dbg_func_in();
-	disable_irq(qt602240_data->client->irq);
-
-#ifdef PROTECTION_MODE 
-	cancel_work_sync(&qt602240_data->work_protection_mode_disable);
-	cancel_work_sync(&qt602240_data->work_tchautocal_disable);
-	del_timer(&protection_mode_timer);
-	del_timer(&tchautocal_timer);
-	protection_mode = false;
-#ifdef ANTI_TOUCH_RECOVERY_AFTER_PROTECTION_MODE
-	f_delta_check=false;
-	f_delta_error_check=false;
-	delta_timer_cnt=0;
-	store_delta_value_before_cnt = 0 ;
-	cancel_work_sync(&qt602240_data->delta_check);
-	del_timer(&delta_check_timer);
-#endif //ANTI_TOUCH_RECOVERY_AFTER_PROTECTION_MODE
-#ifdef GHOST_TOUCH_RECOVERY_AFTER_PROTECTION_MODE
-
-	cancel_work_sync(&qt602240_data->work_two_touch_protection_disable);
-	del_timer(&two_touch_timer);
-	two_touch_move = -1;
-	two_touch_x = 0;
-	two_touch_y = 0;
-	two_touch_jiffies_elapse=0xFFFFFFFF;
-	two_touch_jiffies_start=0xFFFFFFFF;	
-
-	bTwoTouchProtection_pressed = false;
-	bTwoTouchProtection_executed = false;
-
-#endif //ANTI_TOUCH_RECOVERY_AFTER_PROTECTION_MODE
+#ifdef CONFIG_TOUCHSCREEN_SWEEP2WAKE
+        scr_suspended = true;
 #endif
 
-	qt_Power_Sleep();
-	clear_event(TSC_CLEAR_ALL);
-	dbg_func_out();
+#ifdef CONFIG_TOUCHSCREEN_SWEEP2WAKE
+    if (s2w_switch == 0)
+#endif
+    {
+        dbg_func_in();
+        disable_irq(qt602240_data->client->irq);
+    
+    #ifdef PROTECTION_MODE 
+        cancel_work_sync(&qt602240_data->work_protection_mode_disable);
+        cancel_work_sync(&qt602240_data->work_tchautocal_disable);
+        del_timer(&protection_mode_timer);
+        del_timer(&tchautocal_timer);
+        protection_mode = false;
+    #ifdef ANTI_TOUCH_RECOVERY_AFTER_PROTECTION_MODE
+        f_delta_check=false;
+        f_delta_error_check=false;
+        delta_timer_cnt=0;
+        store_delta_value_before_cnt = 0 ;
+        cancel_work_sync(&qt602240_data->delta_check);
+        del_timer(&delta_check_timer);
+    #endif //ANTI_TOUCH_RECOVERY_AFTER_PROTECTION_MODE
+    #ifdef GHOST_TOUCH_RECOVERY_AFTER_PROTECTION_MODE
+    
+        cancel_work_sync(&qt602240_data->work_two_touch_protection_disable);
+        del_timer(&two_touch_timer);
+        two_touch_move = -1;
+        two_touch_x = 0;
+        two_touch_y = 0;
+        two_touch_jiffies_elapse=0xFFFFFFFF;
+        two_touch_jiffies_start=0xFFFFFFFF;	
+    
+        bTwoTouchProtection_pressed = false;
+        bTwoTouchProtection_executed = false;
+    
+    #endif //ANTI_TOUCH_RECOVERY_AFTER_PROTECTION_MODE
+    #endif
+    
+        qt_Power_Sleep();
+        clear_event(TSC_CLEAR_ALL);
+        dbg_func_out();
+    }
+#ifdef CONFIG_TOUCHSCREEN_SWEEP2WAKE
+        else if (s2w_switch > 0)
+            enable_irq_wake(qt602240_data->client->irq);
+#endif
 	return 0;
 }
 
@@ -4455,26 +4506,39 @@ static int  qt602240_late_resume(struct early_suspend *h)
 		return 0;	/* touchwake will handle touchscreen suspend call */
 #endif
 
-	touch_data_init();
-	qt_Power_Config_Init();
-	// touch ic calibration.
-	calibrate_chip();
-	acquisition_config.tchautocal= T8_TCHAUTOCAL_PROTECTION; // 10
-	acquisition_config.atchcalst = T8_ATCHCALST_PROTECTION;
-	acquisition_config.atchcalsthr = T8_ATCHCALSTHR_PROTECTION; // Never suspend
-	acquisition_config.atchfrccalthr = T8_ATCHFRCCALTHR_PROTECTION;
-	acquisition_config.atchfrccalratio = T8_ATCHFRCCALRATIO_PROTECTION;
-	if (write_acquisition_config(acquisition_config) != CFG_WRITE_OK) {
-		printk("\n[TSP][ERROR] line : %d\n", __LINE__);
-	}
-	cal_correction_limit = 5;
-	debugInfo.calibration_cnt=0;
-	debugInfo.autocal_flag=1;
-	f_resume=true;
-	f_resume_cal=true;
-	enable_irq(qt602240_data->client->irq);
-	dbg_func_out();
-	return 0;
+#ifdef CONFIG_TOUCHSCREEN_SWEEP2WAKE
+        scr_suspended = false;
+#endif
+
+#ifdef CONFIG_TOUCHSCREEN_SWEEP2WAKE
+        if (s2w_switch == 0)
+#endif
+        {
+        touch_data_init();
+        qt_Power_Config_Init();
+        // touch ic calibration.
+        calibrate_chip();
+        acquisition_config.tchautocal= T8_TCHAUTOCAL_PROTECTION; // 10
+        acquisition_config.atchcalst = T8_ATCHCALST_PROTECTION;
+        acquisition_config.atchcalsthr = T8_ATCHCALSTHR_PROTECTION; // Never suspend
+        acquisition_config.atchfrccalthr = T8_ATCHFRCCALTHR_PROTECTION;
+        acquisition_config.atchfrccalratio = T8_ATCHFRCCALRATIO_PROTECTION;
+        if (write_acquisition_config(acquisition_config) != CFG_WRITE_OK) {
+            printk("\n[TSP][ERROR] line : %d\n", __LINE__);
+        }
+        cal_correction_limit = 5;
+        debugInfo.calibration_cnt=0;
+        debugInfo.autocal_flag=1;
+        f_resume=true;
+        f_resume_cal=true;
+        enable_irq(qt602240_data->client->irq);
+        dbg_func_out();
+        }
+#ifdef CONFIG_TOUCHSCREEN_SWEEP2WAKE
+        else if (s2w_switch > 0)
+            disable_irq_wake(qt602240_data->client->irq);
+#endif
+    return 0;
 }
 #endif // CONFIG_PM && CONFIG_HAS_EARLYSUSPEND
 
