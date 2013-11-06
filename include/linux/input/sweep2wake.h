@@ -31,9 +31,12 @@ extern bool scr_suspended;
 extern bool scr_on_touch;
 extern bool exec_count;
 extern bool barrier[2];
+extern int tripon;
+extern int tripoff;
+extern unsigned long triptime;
 
 /* Sweep2wake main function */
-extern void detect_sweep2wake(int, int);
+extern void detect_sweep2wake(int, int, unsigned long, int);
 
 /* PowerKey setter */
 extern void sweep2wake_setdev(struct input_dev *);

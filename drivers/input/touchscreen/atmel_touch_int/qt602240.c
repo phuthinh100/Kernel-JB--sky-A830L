@@ -3939,6 +3939,9 @@ void report_input (int touch_status) {
                         barrier[0] = false;
                         barrier[1] = false;
                         scr_on_touch = false;
+                        tripoff = 0;
+                        tripon = 0;
+                        triptime = 0;
                 }
 #endif
 
@@ -3977,7 +3980,7 @@ void report_input (int touch_status) {
 		}
 
 #ifdef CONFIG_TOUCHSCREEN_SWEEP2WAKE
-        detect_sweep2wake(fingerInfo[i].x, fingerInfo[i].y);
+        detect_sweep2wake(fingerInfo[i].x, fingerInfo[i].y, jiffies, i);
 #endif
 
 	}
@@ -4450,7 +4453,7 @@ static int qt602240_early_suspend(struct early_suspend *h)
 #endif
 
 #ifdef CONFIG_TOUCHSCREEN_SWEEP2WAKE
-    if (s2w_switch == 0)
+    if (s2w_switch == 0 || s2w_switch == 2)
 #endif
     {
         dbg_func_in();
@@ -4511,7 +4514,7 @@ static int  qt602240_late_resume(struct early_suspend *h)
 #endif
 
 #ifdef CONFIG_TOUCHSCREEN_SWEEP2WAKE
-        if (s2w_switch == 0)
+        if (s2w_switch == 0 || s2w_switch == 2)
 #endif
         {
         touch_data_init();
