@@ -26,7 +26,7 @@
 #include <linux/hrtimer.h>
 //#include <linux/input/lge_touch_core.h>
 
-extern int s2w_switch;
+extern int sweep2wake;
 extern bool scr_suspended;
 extern bool scr_on_touch;
 extern bool exec_count;

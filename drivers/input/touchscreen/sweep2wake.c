@@ -44,7 +44,7 @@
 extern bool is_single_touch(void);
 
 /* Resources */
-int s2w_switch = 0;
+int sweep2wake = 0;
 bool scr_suspended = false, exec_count = true;
 bool scr_on_touch = false, barrier[2] = {false, false};
 static struct input_dev * sweep2wake_pwrdev;
@@ -74,13 +74,13 @@ static int __init read_s2w_cmdline(char *s2w)
 {
 	if (strcmp(s2w, "1") == 0) {
 		printk(KERN_INFO "[cmdline_s2w]: Sweep2Wake enabled. | s2w='%s'", s2w);
-		s2w_switch = 1;
+		sweep2wake = 1;
 	} else if (strcmp(s2w, "0") == 0) {
 		printk(KERN_INFO "[cmdline_s2w]: Sweep2Wake disabled. | s2w='%s'", s2w);
-		s2w_switch = 0;
+		sweep2wake = 0;
 	} else {
 		printk(KERN_INFO "[cmdline_s2w]: No valid input found. Sweep2Wake disabled. | s2w='%s'", s2w);
-		s2w_switch = 0;
+		sweep2wake = 0;
 	}
 	return 1;
 }
@@ -148,7 +148,7 @@ void detect_sweep2wake(int sweep_coord, int sweep_height, unsigned long time, in
 	}
 
     //left->right
-    if ((scr_suspended == true) && (s2w_switch > 0) && sweep_height > 700) {
+    if ((scr_suspended == true) && (sweep2wake > 0) && sweep_height > 700) {
         printk("[sweep2wake]:left to right x,y(%d,%d) jiffies:%lu\n", sweep_coord, sweep_height, time);
         if (sweep_coord < 100) {
         tripon = 1;
@@ -162,7 +162,7 @@ void detect_sweep2wake(int sweep_coord, int sweep_height, unsigned long time, in
             sweep2wake_pwrtrigger();
         }
     //right->left
-    } else if ((scr_suspended == false) && (s2w_switch > 0) && sweep_height > 700) {
+    } else if ((scr_suspended == false) && (sweep2wake > 0) && sweep_height > 700) {
         printk("[sweep2wake]:right to left x,y(%d,%d) jiffies:%lu\n", sweep_coord, sweep_height, time);
         if (sweep_coord > 600) {
             tripoff = 1;
@@ -178,7 +178,7 @@ void detect_sweep2wake(int sweep_coord, int sweep_height, unsigned long time, in
     }
 
 /*    //power on
-	if ((single_touch) && (scr_suspended == true) && (s2w_switch > 0)) {
+	if ((single_touch) && (scr_suspended == true) && (sweep2wake > 0)) {
         pr_info("line : %d | func : %s\n", __LINE__, __func__);
 		prev_coord = 0;
 		next_coord = s2w_start_posn;
@@ -209,7 +209,7 @@ void detect_sweep2wake(int sweep_coord, int sweep_height, unsigned long time, in
 			}
 		}
 	//power off
-	} else if ((single_touch) && (scr_suspended == false) && (s2w_switch > 0)) {
+	} else if ((single_touch) && (scr_suspended == false) && (sweep2wake > 0)) {
 		if (s2w_swap_coord == 1) {
 			//swap back for off scenario ONLY
 			swap_temp1 = sweep_coord;
@@ -339,7 +339,7 @@ static ssize_t s2w_swap_coord_store(struct kobject *kobj,
 static ssize_t sweep2wake_show(struct kobject *kobj,
 	struct kobj_attribute *attr, char *buf)
 {
-	return sprintf(buf, "%i\n", s2w_switch);
+	return sprintf(buf, "%i\n", sweep2wake);
 }
 
 static ssize_t sweep2wake_store(struct kobject *kobj,
@@ -347,7 +347,7 @@ static ssize_t sweep2wake_store(struct kobject *kobj,
 {
 	unsigned int data;
 	if(sscanf(buf, "%i\n", &data) == 1)
-		s2w_switch = data;
+		sweep2wake = data;
 	else
 		pr_info("%s: unknown input!\n", __FUNCTION__);
 	return count;
@@ -384,7 +384,7 @@ static struct kobj_attribute s2w_swap_coord_attribute =
 		s2w_swap_coord_store);
 
 static struct kobj_attribute sweep2wake_attribute =
-	__ATTR(s2w_switch,
+	__ATTR(sweep2wake,
 		0666,
 		sweep2wake_show,
 		sweep2wake_store);
@@ -415,7 +415,7 @@ static int __init sweep2wake_init(void)
 {
 	int sysfs_result;
 
-	s2w_parameters_kobj = kobject_create_and_add("android_touch_kobj", NULL);
+	s2w_parameters_kobj = kobject_create_and_add("android_touch", NULL);
 	if (!s2w_parameters_kobj) {
 		pr_err("%s kobject create failed!\n", __FUNCTION__);
 		return -ENOMEM;
