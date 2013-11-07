@@ -45,6 +45,9 @@ extern bool is_single_touch(void);
 
 /* Resources */
 int sweep2wake = 0;
+int doubletap2wake = 0;
+int dt2w_switch_temp = 1;
+int dt2w_changed = 0;
 bool scr_suspended = false, exec_count = true;
 bool scr_on_touch = false, barrier[2] = {false, false};
 static struct input_dev * sweep2wake_pwrdev;
@@ -61,12 +64,15 @@ static int s2w_swap_coord = 0;
 int tripon = 0;
 int tripoff = 0;
 unsigned long triptime = 0;
-//unsigned long initial_time = 0;
-//unsigned long dt2w_time[2] = {0, 0};
-//unsigned int dt2w_x[2] = {0, 0};
-//unsigned int dt2w_y[2] = {0, 0};
-//int status[2] = {0,0};
+unsigned long initial_time = 0;
+unsigned long dt2w_time[2] = {0, 0};
+unsigned int dt2w_x[2] = {0, 0};
+unsigned int dt2w_y[2] = {0, 0};
+int status[2] = {0,0};
 #define S2W_TIMEOUT 75
+#define DT2W_TIMEOUT_MAX 40
+#define DT2W_TIMEOUT_MIN 12
+#define DT2W_DELTA 75
 
 //#ifdef CONFIG_CMDLINE_OPTIONS
 /* Read cmdline for s2w */
@@ -100,6 +106,15 @@ static void reset_sweep2wake(void)
     tripoff = 0;
     tripon = 0;
     triptime = 0;
+
+	//reset doubletap2wake
+	dt2w_time[0] = 0;
+	dt2w_x[0] = 0;
+	dt2w_y[0] = 0;
+	dt2w_time[1] = 0;
+	dt2w_x[1] = 0;
+	dt2w_y[1] = 0;
+	//initial_time = 0;
     return;
 }
 
@@ -176,79 +191,50 @@ void detect_sweep2wake(int sweep_coord, int sweep_height, unsigned long time, in
             sweep2wake_pwrtrigger();
         }
     }
-
-/*    //power on
-	if ((single_touch) && (scr_suspended == true) && (sweep2wake > 0)) {
-        pr_info("line : %d | func : %s\n", __LINE__, __func__);
-		prev_coord = 0;
-		next_coord = s2w_start_posn;
-		if ((barrier[0] == true) ||
-		   ((sweep_coord > prev_coord) &&
-		    (sweep_coord < next_coord))) {
-            pr_info("line : %d | func : %s\n", __LINE__, __func__);
-			prev_coord = next_coord;
-			next_coord = s2w_mid_posn;
-			barrier[0] = true;
-			if ((barrier[1] == true) ||
-			   ((sweep_coord > prev_coord) &&
-			    (sweep_coord < next_coord))) {
-                pr_info("line : %d | func : %s\n", __LINE__, __func__);
-				prev_coord = next_coord;
-				barrier[1] = true;
-				if ((sweep_coord > prev_coord)) {
-                    pr_info("line : %d | func : %s\n", __LINE__, __func__);
-					if (sweep_coord > s2w_end_posn) {
-                        pr_info("line : %d | func : %s\n", __LINE__, __func__);
-						if (exec_count) {
-							printk(KERN_INFO "[sweep2wake]: ON");
-							sweep2wake_pwrtrigger();
-							exec_count = false;
-						}
-					}
-				}
-			}
-		}
-	//power off
-	} else if ((single_touch) && (scr_suspended == false) && (sweep2wake > 0)) {
-		if (s2w_swap_coord == 1) {
-			//swap back for off scenario ONLY
-			swap_temp1 = sweep_coord;
-			swap_temp2 = sweep_height;
-
-			sweep_height = swap_temp1;
-			sweep_coord = swap_temp2;
-		}
-
-		scr_on_touch=true;
-		prev_coord = (DEFAULT_S2W_X_MAX - DEFAULT_S2W_X_FINAL);
-		next_coord = DEFAULT_S2W_X_B2;
-		if ((barrier[0] == true) ||
-		   ((sweep_coord < prev_coord) &&
-		    (sweep_coord > next_coord) &&
-		    (sweep_height > DEFAULT_S2W_Y_LIMIT))) {
-			prev_coord = next_coord;
-			next_coord = DEFAULT_S2W_X_B1;
-			barrier[0] = true;
-			if ((barrier[1] == true) ||
-			   ((sweep_coord < prev_coord) &&
-			    (sweep_coord > next_coord) &&
-			    (sweep_height > DEFAULT_S2W_Y_LIMIT))) {
-				prev_coord = next_coord;
-				barrier[1] = true;
-				if ((sweep_coord < prev_coord) &&
-				    (sweep_height > DEFAULT_S2W_Y_LIMIT)) {
-					if (sweep_coord < DEFAULT_S2W_X_FINAL) {
-						if (exec_count) {
-							printk(KERN_INFO "[sweep2wake]: OFF");
-							sweep2wake_pwrtrigger();
-							exec_count = false;
-						}
-					}
-				}
-			}
-		}
-	}*/
 }
+
+void doubletap2wake_func(int x, int y, unsigned long time)
+{
+
+	int delta_x = 0;
+	int delta_y = 0;
+
+	printk("[dt2wake]: x,y(%d,%d) jiffies:%lu\n", x, y, time);
+
+        dt2w_time[1] = dt2w_time[0];
+        dt2w_time[0] = time;
+
+	if (!initial_time)
+		initial_time = time;	
+
+	if (time - initial_time > 800)
+		reset_sweep2wake();
+	
+	if ((dt2w_time[0] - dt2w_time[1]) < 10)
+		return;
+
+	dt2w_x[1] = dt2w_x[0];
+    dt2w_x[0] = x;
+	dt2w_y[1] = dt2w_y[0];
+    dt2w_y[0] = y;
+
+	delta_x = (dt2w_x[0]-dt2w_x[1]);
+	delta_y = (dt2w_y[0]-dt2w_y[1]);
+
+        if (scr_suspended && doubletap2wake > 0) {
+		if (y > 50 && y < 1200
+			&& ((dt2w_time[0] - initial_time) > DT2W_TIMEOUT_MIN)
+			&& ((dt2w_time[0] - initial_time) < DT2W_TIMEOUT_MAX)
+			&& (abs(delta_x) < DT2W_DELTA)
+			&& (abs(delta_y) < DT2W_DELTA)
+			) {
+                printk("[DT2W]: OFF->ON\n");
+                sweep2wake_pwrtrigger();
+		}
+	}
+        return;
+}
+
 
 /********************* SYSFS INTERFACE ***********************/
 static ssize_t s2w_start_posn_show(struct kobject *kobj,
@@ -353,6 +339,23 @@ static ssize_t sweep2wake_store(struct kobject *kobj,
 	return count;
 }
 
+static ssize_t doubletap2wake_show(struct kobject *kobj,
+	struct kobj_attribute *attr, char *buf)
+{
+	return sprintf(buf, "%i\n", doubletap2wake);
+}
+
+static ssize_t doubletap2wake_store(struct kobject *kobj,
+	struct kobj_attribute *attr, const char *buf, size_t count)
+{
+	unsigned int data;
+	if(sscanf(buf, "%i\n", &data) == 1)
+		doubletap2wake = data;
+	else
+		pr_info("%s: unknown input!\n", __FUNCTION__);
+	return count;
+}
+
 static struct kobj_attribute s2w_start_posn_attribute =
 	__ATTR(s2w_start_posn,
 		0666,
@@ -389,6 +392,12 @@ static struct kobj_attribute sweep2wake_attribute =
 		sweep2wake_show,
 		sweep2wake_store);
 
+static struct kobj_attribute doubletap2wake_attribute =
+	__ATTR(doubletap2wake,
+		0666,
+		doubletap2wake_show,
+		doubletap2wake_store);
+
 static struct attribute *s2w_parameters_attrs[] =
 	{
 		&s2w_start_posn_attribute.attr,
@@ -397,6 +406,7 @@ static struct attribute *s2w_parameters_attrs[] =
 		&s2w_threshold_attribute.attr,
 		&s2w_swap_coord_attribute.attr,
 		&sweep2wake_attribute.attr,
+		&doubletap2wake_attribute.attr,
 		NULL,
 	};
 

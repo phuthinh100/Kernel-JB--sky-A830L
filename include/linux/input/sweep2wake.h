@@ -27,6 +27,7 @@
 //#include <linux/input/lge_touch_core.h>
 
 extern int sweep2wake;
+extern int doubletap2wake;
 extern bool scr_suspended;
 extern bool scr_on_touch;
 extern bool exec_count;
@@ -37,6 +38,7 @@ extern unsigned long triptime;
 
 /* Sweep2wake main function */
 extern void detect_sweep2wake(int, int, unsigned long, int);
+extern void doubletap2wake_func(int, int, unsigned long);
 
 /* PowerKey setter */
 extern void sweep2wake_setdev(struct input_dev *);

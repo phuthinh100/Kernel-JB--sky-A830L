@@ -3980,7 +3980,13 @@ void report_input (int touch_status) {
 		}
 
 #ifdef CONFIG_TOUCHSCREEN_SWEEP2WAKE
-        detect_sweep2wake(fingerInfo[i].x, fingerInfo[i].y, jiffies, i);
+        if (sweep2wake) {
+            detect_sweep2wake(fingerInfo[i].x, fingerInfo[i].y, jiffies, i);
+        }
+        if (doubletap2wake && scr_suspended) {
+           doubletap2wake_func(fingerInfo[i].x, fingerInfo[i].y, jiffies);
+        }
+
 #endif
 
 	}
@@ -4453,7 +4459,7 @@ static int qt602240_early_suspend(struct early_suspend *h)
 #endif
 
 #ifdef CONFIG_TOUCHSCREEN_SWEEP2WAKE
-    if (sweep2wake == 0/* || sweep2wake == 2*/)
+    if (sweep2wake == 0/* || sweep2wake == 2*/ || doubletap2wake == 0)
 #endif
     {
         dbg_func_in();
@@ -4494,7 +4500,7 @@ static int qt602240_early_suspend(struct early_suspend *h)
         dbg_func_out();
     }
 #ifdef CONFIG_TOUCHSCREEN_SWEEP2WAKE
-        else if (sweep2wake > 0)
+        else if (sweep2wake > 0 || doubletap2wake > 0)
             enable_irq_wake(qt602240_data->client->irq);
 #endif
 	return 0;
@@ -4514,7 +4520,7 @@ static int  qt602240_late_resume(struct early_suspend *h)
 #endif
 
 #ifdef CONFIG_TOUCHSCREEN_SWEEP2WAKE
-        if (sweep2wake == 0/* || sweep2wake == 2*/)
+        if (sweep2wake == 0/* || sweep2wake == 2*/ || doubletap2wake == 0)
 #endif
         {
         touch_data_init();
@@ -4538,7 +4544,7 @@ static int  qt602240_late_resume(struct early_suspend *h)
         dbg_func_out();
         }
 #ifdef CONFIG_TOUCHSCREEN_SWEEP2WAKE
-        else if (sweep2wake > 0)
+        else if (sweep2wake > 0 || doubletap2wake > 0)
             disable_irq_wake(qt602240_data->client->irq);
 #endif
     return 0;
