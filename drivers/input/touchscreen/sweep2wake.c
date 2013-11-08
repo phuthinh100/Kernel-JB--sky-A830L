@@ -70,7 +70,7 @@ unsigned int dt2w_x[2] = {0, 0};
 unsigned int dt2w_y[2] = {0, 0};
 int status[2] = {0,0};
 #define S2W_TIMEOUT 75
-#define DT2W_TIMEOUT_MAX 40
+#define DT2W_TIMEOUT_MAX 120
 #define DT2W_TIMEOUT_MIN 12
 #define DT2W_DELTA 75
 
@@ -102,6 +102,7 @@ EXPORT_SYMBOL(sweep2wake_setdev);
 
 static void reset_sweep2wake(void)
 {
+    pr_info("[sweep2wake]: line : %d | func : %s\n", __LINE__, __func__);
     //reset sweep2wake
     tripoff = 0;
     tripon = 0;
@@ -114,7 +115,7 @@ static void reset_sweep2wake(void)
 	dt2w_time[1] = 0;
 	dt2w_x[1] = 0;
 	dt2w_y[1] = 0;
-	//initial_time = 0;
+	initial_time = 0;
     return;
 }
 
@@ -163,7 +164,7 @@ void detect_sweep2wake(int sweep_coord, int sweep_height, unsigned long time, in
 	}
 
     //left->right
-    if ((scr_suspended == true) && (sweep2wake > 0) && sweep_height > 700) {
+    if ((scr_suspended == true) && (sweep2wake == 1) && sweep_height > 700) {
         printk("[sweep2wake]:left to right x,y(%d,%d) jiffies:%lu\n", sweep_coord, sweep_height, time);
         if (sweep_coord < 100) {
         tripon = 1;
