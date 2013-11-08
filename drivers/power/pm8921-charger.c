@@ -27,7 +27,6 @@
 #include <linux/workqueue.h>
 #include <linux/debugfs.h>
 #include <linux/slab.h>
-#include <linux/blx.h>
 
 #if defined (CONFIG_MACH_MSM8960_EF46L)
 #include <linux/mfd/pm8xxx/misc.h>
@@ -780,10 +779,6 @@ struct pm8921_chg_chip {
 	enum pm8921_chg_hot_thr		hot_thr;
 	int				rconn_mohm;
 	enum pm8921_chg_led_src_config	led_src_config;
-	int        recent_reported_soc;
-	int        ext_batt_health;
-	int        ext_batt_temp_monitor;
-	int        eoc_check_soc;
 	
 #if defined(CONFIG_HAS_EARLYSUSPEND)
 	struct early_suspend early_suspend;
@@ -2544,7 +2539,6 @@ static int get_prop_batt_capacity(struct pm8921_chg_chip *chip)
 	pantech_pm_log(percent_soc, (unsigned int) chip->cable_type);
 #endif
 
-	chip->recent_reported_soc = percent_soc;
 	return percent_soc;
 }
 #else
@@ -2617,20 +2611,14 @@ static int get_prop_batt_health(struct pm8921_chg_chip *chip)
 	}
 #endif
 
-	//temp = pm_chg_get_rt_status(chip, BATTTEMP_HOT_IRQ);
-	//if (temp)
-	//	return POWER_SUPPLY_HEALTH_OVERHEAT;
-	  if (chip->ext_batt_temp_monitor) {
-	    return chip->ext_batt_health;
-	  } else {
-		  temp = pm_chg_get_rt_status(chip, BATTTEMP_HOT_IRQ);
-		  if (temp)
-			  return POWER_SUPPLY_HEALTH_OVERHEAT;
+	temp = pm_chg_get_rt_status(chip, BATTTEMP_HOT_IRQ);
+	if (temp)
+		return POWER_SUPPLY_HEALTH_OVERHEAT;
 
-		  temp = pm_chg_get_rt_status(chip, BATTTEMP_COLD_IRQ);
-		  if (temp)
-			  return POWER_SUPPLY_HEALTH_COLD;
-	  }
+	temp = pm_chg_get_rt_status(chip, BATTTEMP_COLD_IRQ);
+	if (temp)
+		return POWER_SUPPLY_HEALTH_COLD;
+
 #if defined(PANTECH_BATT_CHARGE_DONE_IN_WARM_COOL)
 	if (chip->batt_charge_done_warm_cool)
 		return POWER_SUPPLY_HEALTH_OVERHEAT;
@@ -2693,31 +2681,10 @@ static int get_prop_batt_status(struct pm8921_chg_chip *chip)
 		if (!pm_chg_get_rt_status(chip, BATT_INSERTED_IRQ)
 			|| !pm_chg_get_rt_status(chip, BAT_TEMP_OK_IRQ)
 			|| pm_chg_get_rt_status(chip, CHGHOT_IRQ)
-			//|| pm_chg_get_rt_status(chip, VBATDET_LOW_IRQ)
-			|| (!chip->eoc_check_soc &&
-					pm_chg_get_rt_status(chip, VBATDET_LOW_IRQ))
-			|| (chip->ext_batt_temp_monitor &&
-					(chip->ext_batt_health == POWER_SUPPLY_HEALTH_OVERHEAT)))
+			|| pm_chg_get_rt_status(chip, VBATDET_LOW_IRQ))
 
 			batt_state = POWER_SUPPLY_STATUS_NOT_CHARGING;
 	}
-
-	if (chip->eoc_check_soc) {
-		//if (get_prop_batt_capacity(chip) == 100) {
-#ifdef CONFIG_BLX
-		if (get_prop_batt_capacity(chip) >= get_charginglimit())
-#else
-		if (get_prop_batt_capacity(chip) == 100)
-#endif
-			if (batt_state == POWER_SUPPLY_STATUS_CHARGING)
-				batt_state = POWER_SUPPLY_STATUS_FULL;
-		} else {
-			if (batt_state == POWER_SUPPLY_STATUS_FULL)
-				batt_state = POWER_SUPPLY_STATUS_CHARGING;
-		}
-	//}
-
-	pr_debug("batt_state = %d fsm_state = %d \n",batt_state, fsm_state);
 
 #if defined(FEATURE_PANTECH_BATTERY_STATUS)
 	if (is_dc_chg_plugged_in(chip) || is_usb_chg_plugged_in(chip)) {
@@ -2754,17 +2721,9 @@ static int get_prop_batt_status(struct pm8921_chg_chip *chip)
 	#endif
 
 	#if defined(CONFIG_PANTECH_PMIC_MAX17058)
-#ifndef CONFIG_BLX
-	if (pm8921_bms_get_percent(max17058_uses) >= get_charginglimit())
-#else
-    if (pm8921_bms_get_percent(max17058_uses) >= 100)
-#endif
+	if (pm8921_bms_get_percent(max17058_uses) >= 100)   
 	#else
-#ifndef CONFIG_BLX
-    if (pm8921_bms_get_percent() >= get_charginglimit())
-#else
-	if (pm8921_bms_get_percent() >= 100)
-#endif
+	if (pm8921_bms_get_percent() >= 100)        
 	#endif
 		batt_state =  POWER_SUPPLY_STATUS_FULL;
 #endif
@@ -3349,32 +3308,6 @@ int pm8921_charger_enable(bool enable)
 }
 EXPORT_SYMBOL(pm8921_charger_enable);
 
-int pm8921_force_start_charging(void)
-{
-	int rc;
-
-	if (!the_chip) {
-		pr_err("called before init\n");
-		return -EINVAL;
-	}
-
-	if (the_chip->eoc_check_soc) {
-		rc = pm_chg_vbatdet_set(the_chip,
-				the_chip->max_voltage_mv);
-		if (rc) {
-			pr_err("failed to set vbatdet\n");
-			return rc;
-		}
-	}
-
-	rc = pm_chg_auto_enable(the_chip, 1);
-	if (rc)
-		pr_err("Failed rc=%d\n", rc);
-
-	return rc;
-}
-EXPORT_SYMBOL(pm8921_force_start_charging);
-
 int pm8921_is_usb_chg_plugged_in(void)
 {
 	if (!the_chip) {
@@ -3584,43 +3517,6 @@ int pm8921_set_usb_power_supply_type(enum power_supply_type type)
 }
 EXPORT_SYMBOL_GPL(pm8921_set_usb_power_supply_type);
 #endif
-
-int pm8921_set_ext_battery_health(int health)
-{
-	if (!the_chip) {
-		pr_err("called before init\n");
-		return -EINVAL;
-	}
-
-	the_chip->ext_batt_health  = health;
-
-	pr_debug("health = %d\n", the_chip->ext_batt_health);
-	return 0;
-}
-EXPORT_SYMBOL(pm8921_set_ext_battery_health);
-
-int pm8921_get_batt_state(void)
-{
-	int batt_state = POWER_SUPPLY_STATUS_DISCHARGING;
-	int fsm_state;
-	int i;
-
-	if (!the_chip) {
-		pr_err("called before init\n");
-		return -EINVAL;
-	}
-
-	fsm_state = pm_chg_get_fsm_state(the_chip);
-
-	for (i = 0; i < ARRAY_SIZE(map); i++)
-		if (map[i].fsm_state == fsm_state)
-			batt_state = map[i].batt_state;
-
-	pr_debug("batt_state = %d fsm_state = %d \n",batt_state, fsm_state);
-	return batt_state;
-}
-EXPORT_SYMBOL(pm8921_get_batt_state);
-
 int pm8921_batt_temperature(void)
 {
 	if (!the_chip) {
@@ -3984,17 +3880,9 @@ static irqreturn_t vbatdet_low_irq_handler(int irq, void *data)
 
 	if (high_transition) {
 		/* enable auto charging */
-		//pm_chg_auto_enable(chip, !charging_disabled);
-		//pr_info("batt fell below resume voltage %s\n",
-		//	charging_disabled ? "" : "charger enabled");
-		if (!chip->eoc_check_soc
-				|| pm_chg_get_fsm_state(data) == FSM_STATE_ON_BAT_3) {
-			/* enable auto charging */
-			pm_chg_auto_enable(chip, !charging_disabled);
-			pr_info("batt fell below resume voltage %s\n",
-					charging_disabled ? "" : "charger enabled");
-		}
-
+		pm_chg_auto_enable(chip, !charging_disabled);
+		pr_info("batt fell below resume voltage %s\n",
+			charging_disabled ? "" : "charger enabled");
 	}
 #if defined(CONFIG_PANTECH_CHARGER)
 	pr_err("fsm_state=%d\n", pm_chg_get_fsm_state(data));
@@ -4360,15 +4248,6 @@ static irqreturn_t fastchg_irq_handler(int irq, void *data)
 {
 	struct pm8921_chg_chip *chip = data;
 	int high_transition;
-	int rc;
-
-	if (chip->eoc_check_soc) {
-		rc = pm_chg_vbatdet_set(chip,
-				chip->max_voltage_mv
-				- chip->resume_voltage_delta);
-		if (rc)
-			pr_err("failed to set vbatdet rc=%d\n", rc);
-	}
 
 	high_transition = pm_chg_get_rt_status(chip, FASTCHG_IRQ);
 	if (high_transition && !delayed_work_pending(&chip->eoc_work)) {
@@ -4639,7 +4518,6 @@ static void pm_batt_external_power_changed(struct power_supply *psy)
  *		per update_time minutes
  *
  */
-#define LOW_SOC_HEARTBEAT_MS  20000
 static void update_heartbeat(struct work_struct *work)
 {
 	struct delayed_work *dwork = to_delayed_work(work);
@@ -4664,11 +4542,6 @@ static void update_heartbeat(struct work_struct *work)
         schedule_work(&(chip->bms_notify.work));       
 #else
 	power_supply_changed(&chip->batt_psy);
-	if (chip->recent_reported_soc <= 20)
-		schedule_delayed_work(&chip->update_heartbeat_work,
-				round_jiffies_relative(msecs_to_jiffies
-						(LOW_SOC_HEARTBEAT_MS)));
-	else
 		schedule_delayed_work(&chip->update_heartbeat_work,
 			      round_jiffies_relative(msecs_to_jiffies
 						     (chip->update_time)));
@@ -4682,7 +4555,6 @@ module_param(vdd_max_increase_mv, int, 0644);
 
 static int ichg_threshold_ua = -400000;
 module_param(ichg_threshold_ua, int, 0644);
-#define PM8921_CHG_VDDMAX_RES_MV  10
 static void adjust_vdd_max_for_fastchg(struct pm8921_chg_chip *chip)
 {
 	int ichg_meas_ua, vbat_uv;
@@ -4741,9 +4613,6 @@ static void adjust_vdd_max_for_fastchg(struct pm8921_chg_chip *chip)
 		pr_err("adj vdd_max lower than default max voltage\n");
 		return;
 	}
-
-	adj_vdd_max_mv = DIV_ROUND_UP(adj_vdd_max_mv, PM8921_CHG_VDDMAX_RES_MV)
-	        		  * PM8921_CHG_VDDMAX_RES_MV;
 
 	if (adj_vdd_max_mv > (chip->max_voltage_mv + vdd_max_increase_mv))
 		adj_vdd_max_mv = chip->max_voltage_mv + vdd_max_increase_mv;
@@ -4939,7 +4808,6 @@ static void eoc_worker(struct work_struct *work)
 				struct pm8921_chg_chip, eoc_work);
 	static int count;
 	int end;
-	int percent_soc;
 
 #if !defined(CONFIG_PANTECH_CHARGER)
 	pm_chg_failed_clear(chip, 1);
@@ -4958,16 +4826,6 @@ static void eoc_worker(struct work_struct *work)
 		count = 0;
 	}
 
-	if (chip->eoc_check_soc) {
-		percent_soc = get_prop_batt_capacity(chip);
-#ifdef CONFIG_BLX
-		if (percent_soc >= get_charginglimit())
-#else
-		if (percent_soc == 100)
-#endif
-			count = CONSECUTIVE_COUNT;
-	}
-
 	if (count == CONSECUTIVE_COUNT) {
 		count = 0;
 		pr_info("End of Charging\n");
@@ -4977,14 +4835,10 @@ static void eoc_worker(struct work_struct *work)
 		if (is_ext_charging(chip))
 			chip->ext_charge_done = true;
 
-#ifdef CONFIG_BLX
-
-#else
 		if (chip->is_bat_warm || chip->is_bat_cool)
 			chip->bms_notify.is_battery_full = 0;
 		else
 			chip->bms_notify.is_battery_full = 1;
-#endif
 
 #if defined(PANTECH_CHARGER_TIME_LIMITATION)
 		if(chip->bms_notify.is_battery_full)
@@ -5401,10 +5255,7 @@ static void __devinit determine_initial_state(struct pm8921_chg_chip *chip)
 	pm8921_chg_enable_irq(chip, CHGFAIL_IRQ);
 	pm8921_chg_enable_irq(chip, FASTCHG_IRQ);
 	pm8921_chg_enable_irq(chip, VBATDET_LOW_IRQ);
-	//pm8921_chg_enable_irq(chip, BAT_TEMP_OK_IRQ);
-
-	if (!chip->ext_batt_temp_monitor)
-		pm8921_chg_enable_irq(chip, BAT_TEMP_OK_IRQ);
+	pm8921_chg_enable_irq(chip, BAT_TEMP_OK_IRQ);
 
 	spin_lock_irqsave(&vbus_lock, flags);
 	if (usb_chg_current) {
@@ -5626,16 +5477,7 @@ static void pm8921_chg_set_hw_clk_switching(struct pm8921_chg_chip *chip)
 	}
 }
 
-#define ENUM_TIMER_STOP_BIT	BIT(1)
-#define BOOT_DONE_BIT		BIT(6)
-#define BOOT_TIMER_EN_BIT  BIT(1)
-#define BOOT_DONE_MASK    (BOOT_DONE_BIT | BOOT_TIMER_EN_BIT)
-#define CHG_BATFET_ON_BIT	BIT(3)
-#define CHG_VCP_EN		BIT(0)
-#define CHG_BAT_TEMP_DIS_BIT	BIT(2)
-#define SAFE_CURRENT_MA		1500
-#define PM_SUB_REV		0x001
-#define VREF_BATT_THERM_FORCE_ON	BIT(7)
+#define VREF_BATT_THERM_FORCE_ON  BIT(7)
 static void detect_battery_removal(struct pm8921_chg_chip *chip)
 {
 	u8 temp;
@@ -5652,19 +5494,24 @@ static void detect_battery_removal(struct pm8921_chg_chip *chip)
 		pm8921_bms_invalidate_shutdown_soc();
 }
 
+#define ENUM_TIMER_STOP_BIT	BIT(1)
+#define BOOT_DONE_BIT		BIT(6)
+#define CHG_BATFET_ON_BIT	BIT(3)
+#define CHG_VCP_EN		BIT(0)
+#define CHG_BAT_TEMP_DIS_BIT	BIT(2)
+#define SAFE_CURRENT_MA		1500
+#define PM_SUB_REV		0x001
+//#define VREF_BATT_THERM_FORCE_ON	BIT(7)
 static int __devinit pm8921_chg_hw_init(struct pm8921_chg_chip *chip)
 {
 	int rc;
 	int vdd_safe;
 	u8 subrev;  //djjeon 20121206 add
-	/* forcing 19p2mhz before accessing any charger registers */
-	pm8921_chg_force_19p2mhz_clk(chip);
 
 	detect_battery_removal(chip);
 
 	rc = pm_chg_masked_write(chip, SYS_CONFIG_2,
-					//BOOT_DONE_BIT, BOOT_DONE_BIT);
-					BOOT_DONE_MASK, BOOT_DONE_MASK);
+					BOOT_DONE_BIT, BOOT_DONE_BIT);
 	if (rc) {
 		pr_err("Failed to set BOOT_DONE_BIT rc=%d\n", rc);
 		return rc;
@@ -5906,7 +5753,7 @@ static int __devinit pm8921_chg_hw_init(struct pm8921_chg_chip *chip)
 	/* Disable EOC FSM processing */
 	pm8xxx_writeb(chip->dev->parent, CHG_BUCK_CTRL_TEST3, 0x91);
 
-	//pm8921_chg_force_19p2mhz_clk(chip);
+	pm8921_chg_force_19p2mhz_clk(chip);
 
 	rc = pm_chg_masked_write(chip, CHG_CNTRL, VREF_BATT_THERM_FORCE_ON,
 						VREF_BATT_THERM_FORCE_ON);
@@ -6095,128 +5942,29 @@ static void create_debugfs_entries(struct pm8921_chg_chip *chip)
 	}
 }
 
-int pm8921_stop_chg_disable_irq(void)
-{
-
-        struct pm8921_chg_chip *chip = the_chip;
-
-        pm8921_chg_disable_irq(chip, ATCFAIL_IRQ);
-        pm8921_chg_disable_irq(chip, CHGHOT_IRQ);
-        pm8921_chg_disable_irq(chip, ATCDONE_IRQ);
-        pm8921_chg_disable_irq(chip, FASTCHG_IRQ);
-        pm8921_chg_disable_irq(chip, CHGDONE_IRQ);
-        pm8921_chg_disable_irq(chip, VBATDET_IRQ);
-        pm8921_chg_disable_irq(chip, VBATDET_LOW_IRQ);
-
-        return 1;
-}
-int pm8921_start_chg_enable_irq(void)
-{
-
-        struct pm8921_chg_chip *chip = the_chip;
-
-        pm8921_chg_enable_irq(chip, ATCFAIL_IRQ);
-        pm8921_chg_enable_irq(chip, CHGHOT_IRQ);
-        pm8921_chg_enable_irq(chip, ATCDONE_IRQ);
-        pm8921_chg_enable_irq(chip, FASTCHG_IRQ);
-        pm8921_chg_enable_irq(chip, CHGDONE_IRQ);
-        pm8921_chg_enable_irq(chip, VBATDET_IRQ);
-        pm8921_chg_enable_irq(chip, VBATDET_LOW_IRQ);
-
-        return 1;
-}
-
-static ssize_t pm8921_chg_status_show(struct device *dev,
-                                struct device_attribute *attr, char *buf)
-{
-        int fsm_state, is_charging, r;
-        bool b_chg_ok = false;
-
-        if (!the_chip) {
-                pr_err("called before init\n");
-                return -EINVAL;
-        }
-
-        fsm_state = pm_chg_get_fsm_state(the_chip);
-        is_charging = is_battery_charging(fsm_state);
-
-        if (is_charging) {
-                b_chg_ok = true;
-                r = sprintf(buf, "%d\n", b_chg_ok);
-                pr_info("pm8921_chg_status_show , true ! buf = %s, is_charging = %d\n",
-                                                        buf, is_charging);
-        } else {
-                b_chg_ok = false;
-                r = sprintf(buf, "%d\n", b_chg_ok);
-                pr_info("pm8921_chg_status_show , false ! buf = %s, is_charging = %d\n",
-                                                        buf, is_charging);
-        }
-
-        return r;
-}
-
-static ssize_t pm8921_chg_status_store(struct device *dev,
-                                struct device_attribute *attr,
-                                const char *buf, size_t count)
-{
-        int ret = 0, batt_status = 0;
-        struct pm8921_chg_chip *chip = the_chip;
-
-        if (!count)
-                return -EINVAL;
-
-        batt_status = get_prop_batt_status(chip);
-
-        if (strncmp(buf, "0", 1) == 0) {
-                /* stop charging */
-                pr_info("pm8921_chg_status_store : stop charging start\n");
-                if (batt_status == POWER_SUPPLY_STATUS_CHARGING) {
-                        ret = pm8921_stop_chg_disable_irq();
-                        pm_chg_auto_enable(chip, 0);
-                        pm_chg_charge_dis(chip,1);
-                        pr_info("pm8921_chg_status_store : stop charging end\n");
-                }
-        } else if (strncmp(buf, "1", 1) == 0) {
-                /* start charging */
-                pr_info("pm8921_chg_status_store : start charging start\n");
-                if (batt_status != POWER_SUPPLY_STATUS_CHARGING) {
-                        ret = pm8921_start_chg_enable_irq();
-                        pm_chg_auto_enable(chip, 1);
-                        pm_chg_charge_dis(chip,0);
-                        pr_info("pm8921_chg_status_store : start charging end\n");
-                }
-        }
-
-        if(ret == 0)
-                return -EINVAL;
-
-        return ret;
-}
-DEVICE_ATTR(charge, 0664, pm8921_chg_status_show, pm8921_chg_status_store);
-
 #if defined(CONFIG_PM)
 #if defined(CONFIG_PANTECH_BMS_UPDATE)
 static int pm8921_charger_sleep_time(int soc)
 {
 	int time = 0;
 	int enable;
-
+    
 	if (soc > 5) {
-		time = (soc - 5) * SLEEP_HALF_HOUR;
+		time = (soc - 5) * SLEEP_HALF_HOUR;		
 #if defined(CONFIG_PANTECH_CHARGER_WIRELESS)
 		if (the_chip->wireless_recharge_loop
-			time = SLEEP_FIVE_MINUTE;
+			time = SLEEP_FIVE_MINUTE; 
 #endif
 	} else
 		time = SLEEP_THREE_MINUTE;
-
+        
 #if defined(CONFIG_PANTECH_BMS_TEST)
 	enable = atomic_read(&bms_input_flag);
 
 	if (enable)
 		time = SLEEP_THREE_MINUTE;
 #endif
-
+        
 	return time;
 }
 #endif
@@ -6682,10 +6430,6 @@ static int __devinit pm8921_charger_probe(struct platform_device *pdev)
 	chip->hot_thr = pdata->hot_thr;
 	chip->rconn_mohm = pdata->rconn_mohm;
 	chip->led_src_config = pdata->led_src_config;
-	chip->ext_batt_temp_monitor = pdata->ext_batt_temp_monitor;
-	chip->eoc_check_soc = pdata->eoc_check_soc;
-	if (chip->ext_batt_temp_monitor)
-		chip->ext_batt_health = POWER_SUPPLY_HEALTH_GOOD;
 
 #if defined(CONFIG_PANTECH_CHARGER)
 	chip->update_cable_time = 0;
@@ -6900,10 +6644,7 @@ static int __devinit pm8921_charger_probe(struct platform_device *pdev)
 	enable_irq_wake(chip->pmic_chg_irq[USBIN_VALID_IRQ]);
 	enable_irq_wake(chip->pmic_chg_irq[USBIN_OV_IRQ]);
 	enable_irq_wake(chip->pmic_chg_irq[USBIN_UV_IRQ]);
-	//enable_irq_wake(chip->pmic_chg_irq[BAT_TEMP_OK_IRQ]);
-	if (!chip->ext_batt_temp_monitor)
-		enable_irq_wake(chip->pmic_chg_irq[BAT_TEMP_OK_IRQ]);
-
+	enable_irq_wake(chip->pmic_chg_irq[BAT_TEMP_OK_IRQ]);
 	enable_irq_wake(chip->pmic_chg_irq[VBATDET_LOW_IRQ]);
 	enable_irq_wake(chip->pmic_chg_irq[FASTCHG_IRQ]);
 #if defined(CONFIG_PANTECH_CHARGER)
